@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dashboard Semanal · Laura Flechas · weCAD4you</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<style>
+  :root {
+    --bg: #0b1020;
+    --bg-2: #121933;
+    --card: #161e3d;
+    --card-hover: #1c264a;
+    --border: #243056;
+    --text: #e6eaf2;
+    --text-dim: #93a0c2;
+    --accent: #6c8cff;
+    --accent-2: #4cc9f0;
+    --green: #34d399;
+    --amber: #fbbf24;
+    --red: #f87171;
+    --purple: #a78bfa;
+    --pink: #f472b6;
+    --shadow: 0 10px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: linear-gradient(180deg, #0a0e22 0%, #0b1020 100%);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1400px; margin: 0 auto; padding: 32px 28px 80px; }
+
+  /* Header */
+  header {
+    display: flex; justify-content: space-between; align-items: flex-end;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 20px; margin-bottom: 28px;
+    flex-wrap: wrap; gap: 20px;
+  }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .brand-logo {
+    width: 48px; height: 48px; border-radius: 12px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 22px; color: #0a0e22;
+    box-shadow: var(--shadow);
+  }
+  .brand h1 { font-size: 22px; margin: 0; letter-spacing: -.3px; }
+  .brand p { margin: 2px 0 0; color: var(--text-dim); font-size: 13px; }
+  .meta { text-align: right; font-size: 13px; color: var(--text-dim); }
+  .meta strong { color: var(--text); display: block; font-size: 14px; }
+  .pill {
+    display: inline-block; padding: 4px 10px; border-radius: 999px;
+    background: rgba(108,140,255,.12); color: var(--accent);
+    font-size: 12px; font-weight: 600; margin-top: 6px;
+  }
+
+  /* Section titles */
+  h2 {
+    font-size: 13px; text-transform: uppercase; letter-spacing: 1.4px;
+    color: var(--text-dim); font-weight: 600;
+    margin: 36px 0 14px;
+  }
+
+  /* KPI row */
+  .kpis { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; }
+  @media (max-width: 1100px) { .kpis { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 600px)  { .kpis { grid-template-columns: repeat(2, 1fr); } }
+  .kpi {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px 18px 16px;
+    transition: transform .2s, border-color .2s;
+  }
+  .kpi:hover { transform: translateY(-2px); border-color: var(--accent); }
+  .kpi .label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); margin-bottom: 10px; }
+  .kpi .value { font-size: 30px; font-weight: 700; letter-spacing: -.5px; }
+  .kpi .sub { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+  .kpi.accent .value { color: var(--accent); }
+  .kpi.green  .value { color: var(--green); }
+  .kpi.amber  .value { color: var(--amber); }
+  .kpi.red    .value { color: var(--red); }
+  .kpi.purple .value { color: var(--purple); }
+
+  /* Grid */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; }
+  @media (max-width: 1000px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 14px; padding: 20px;
+  }
+  .card h3 {
+    font-size: 15px; margin: 0 0 4px; font-weight: 600;
+  }
+  .card .subtle { font-size: 12px; color: var(--text-dim); margin: 0 0 16px; }
+  .chart-wrap { position: relative; height: 280px; }
+  .chart-wrap.tall { height: 340px; }
+
+  /* Categories */
+  .cat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  @media (max-width: 900px) { .cat-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 600px) { .cat-grid { grid-template-columns: 1fr; } }
+  .cat {
+    border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px;
+    background: linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0));
+  }
+  .cat .name { font-size: 13px; color: var(--text-dim); margin-bottom: 6px; }
+  .cat .num  { font-size: 24px; font-weight: 700; }
+  .cat .ex   { font-size: 11px; color: var(--text-dim); margin-top: 6px; line-height: 1.5; }
+  .cat .badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 700; margin-bottom: 8px; }
+
+  /* Scorecard */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+  th { color: var(--text-dim); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
+  td.score-cell { width: 140px; }
+  .score-bar {
+    display: flex; align-items: center; gap: 8px;
+  }
+  .score-bar .bar {
+    height: 6px; border-radius: 4px; background: rgba(255,255,255,.07);
+    flex: 1; overflow: hidden; position: relative;
+  }
+  .score-bar .bar i {
+    position: absolute; top: 0; left: 0; bottom: 0; border-radius: 4px;
+  }
+  .score-bar .num { font-weight: 700; min-width: 30px; }
+  .score-9 i { background: var(--green); }
+  .score-7 i { background: var(--accent); }
+  .score-6 i { background: var(--amber); }
+  .score-5 i { background: var(--red); }
+  .tag {
+    display: inline-block; padding: 2px 8px; border-radius: 6px;
+    font-size: 11px; font-weight: 600;
+  }
+  .tag.win { background: rgba(52,211,153,.12); color: var(--green); }
+  .tag.recovery { background: rgba(108,140,255,.12); color: var(--accent); }
+  .tag.discovery { background: rgba(167,139,250,.12); color: var(--purple); }
+  .tag.objection { background: rgba(251,191,36,.14); color: var(--amber); }
+  .tag.handoff { background: rgba(76,201,240,.12); color: var(--accent-2); }
+  .tag.weak { background: rgba(248,113,113,.12); color: var(--red); }
+
+  /* Insights */
+  .insight {
+    border-left: 3px solid var(--accent);
+    padding: 12px 16px; margin: 8px 0;
+    background: rgba(108,140,255,.06);
+    border-radius: 6px;
+    font-size: 13.5px; line-height: 1.6;
+  }
+  .insight.warn { border-color: var(--amber); background: rgba(251,191,36,.05); }
+  .insight.win  { border-color: var(--green); background: rgba(52,211,153,.05); }
+  .insight strong { color: var(--text); }
+
+  /* Footer */
+  footer { text-align: center; color: var(--text-dim); font-size: 12px; margin-top: 50px; padding-top: 20px; border-top: 1px solid var(--border); }
+
+  /* Print */
+  @media print {
+    body { background: white; color: #0b1020; }
+    .card, .kpi { break-inside: avoid; box-shadow: none; }
+    .wrap { max-width: 100%; padding: 16px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand">
+      <div class="brand-logo">w4</div>
+      <div>
+        <h1>Dashboard Semanal · Actividad SDR</h1>
+        <p>Laura Flechas · weCAD4you (SOi Digital)</p>
+      </div>
+    </div>
+    <div class="meta">
+      <strong>Reunión Comité — Martes</strong>
+      <span>Datos al 04 may 2026</span><br>
+      <span>Periodo: 25 mar 2026 → 30 abr 2026</span>
+      <div class="pill">Owner ID 89637960 · Portal 6257770</div>
+    </div>
+  </header>
+
+  <!-- KPI ROW -->
+  <h2>Indicadores clave</h2>
+  <div class="kpis">
+    <div class="kpi accent">
+      <div class="label">Llamadas (filtradas)</div>
+      <div class="value">34</div>
+      <div class="sub">Outbound: 32 · Inbound real: 2</div>
+    </div>
+    <div class="kpi green">
+      <div class="label">Conectadas</div>
+      <div class="value">10</div>
+      <div class="sub">Hubo conversación efectiva</div>
+    </div>
+    <div class="kpi amber">
+      <div class="label">Tasa de conexión</div>
+      <div class="value">31.3%</div>
+      <div class="sub">Conectadas / Outbound</div>
+    </div>
+    <div class="kpi purple">
+      <div class="label">Duración promedio</div>
+      <div class="value">3:21</div>
+      <div class="sub">Llamadas conectadas</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Contactos asignados</div>
+      <div class="value">22</div>
+      <div class="sub">Empresas: 0 ⚠️</div>
+    </div>
+    <div class="kpi green">
+      <div class="label">Score promedio</div>
+      <div class="value">6.7<span style="font-size:14px;color:var(--text-dim)">/10</span></div>
+      <div class="sub">Coaching consultivo</div>
+    </div>
+  </div>
+
+  <!-- ACTIVITY -->
+  <h2>Actividad temporal</h2>
+  <div class="grid-3">
+    <div class="card">
+      <h3>Llamadas por día</h3>
+      <p class="subtle">Volumen diario · marcadas vs conectadas</p>
+      <div class="chart-wrap tall"><canvas id="dailyChart"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>Por semana ISO</h3>
+      <p class="subtle">Tendencia 6 semanas</p>
+      <div class="chart-wrap tall"><canvas id="weeklyChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- OUTCOMES -->
+  <h2>Resultados de las llamadas</h2>
+  <div class="grid-2">
+    <div class="card">
+      <h3>Disposición de llamadas</h3>
+      <p class="subtle">Distribución por status (sin 2FA)</p>
+      <div class="chart-wrap"><canvas id="dispositionChart"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>Conexión efectiva por día</h3>
+      <p class="subtle">% conectadas sobre marcadas</p>
+      <div class="chart-wrap"><canvas id="connectionRateChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- CATEGORIES -->
+  <h2>Categorías de respuesta del prospecto</h2>
+  <p class="subtle" style="color:var(--text-dim); font-size:13px; margin-top:-4px;">Análisis sobre las 10 conversaciones efectivas, según transcripciones.</p>
+  <div class="cat-grid">
+    <div class="cat">
+      <span class="badge tag win">CIERRE</span>
+      <div class="name">Activa servicio / convierte</div>
+      <div class="num">2</div>
+      <div class="ex">Better Smile (Samer) · Samer Riad — outsourcing oficial</div>
+    </div>
+    <div class="cat">
+      <span class="badge tag handoff">HANDOFF</span>
+      <div class="name">Reasignación de cuenta (post Daniela)</div>
+      <div class="num">2</div>
+      <div class="ex">William & Co (Joey) · Scott Adams</div>
+    </div>
+    <div class="cat">
+      <span class="badge tag discovery">DISCOVERY</span>
+      <div class="name">Pide info por correo</div>
+      <div class="num">2</div>
+      <div class="ex">Omicron Dental · Juan Maturana (15-abr)</div>
+    </div>
+    <div class="cat">
+      <span class="badge tag weak">GATEKEEPER</span>
+      <div class="name">Habló con secretaria/recepción</div>
+      <div class="num">2</div>
+      <div class="ex">Barbara Tejos (Selinger) · Chris Campbell</div>
+    </div>
+    <div class="cat">
+      <span class="badge tag recovery">RECOVERY</span>
+      <div class="name">Follow-up de cotización no recibida</div>
+      <div class="num">1</div>
+      <div class="ex">Juan Maturana — correo no llegó, reenvío</div>
+    </div>
+    <div class="cat">
+      <span class="badge tag objection">OBJECIÓN</span>
+      <div class="name">Tiempos de entrega → Servicio Rush</div>
+      <div class="num">1</div>
+      <div class="ex">Peter (overflow lab) — re-envío de aranceles</div>
+    </div>
+  </div>
+
+  <!-- SCORECARD -->
+  <h2>Scorecard de coaching · Venta consultiva</h2>
+  <div class="card">
+    <h3>Evaluación llamada por llamada</h3>
+    <p class="subtle">Escala 1–10 sobre 10 conexiones efectivas. Ver detalle en notas internas.</p>
+    <div style="overflow-x:auto;">
+    <table>
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Cliente</th>
+          <th>Tipo</th>
+          <th>Duración</th>
+          <th class="score-cell">Score</th>
+          <th>Foco de mejora</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>21-abr</td><td>Better Smile (Samer)</td>
+          <td><span class="tag win">Cierre</span></td>
+          <td>—</td>
+          <td><div class="score-bar score-9"><div class="bar"><i style="width:90%"></i></div><span class="num">9.0</span></div></td>
+          <td>Documentar alcance del free trial por escrito</td>
+        </tr>
+        <tr>
+          <td>21-abr</td><td>Samer Riad (2da)</td>
+          <td><span class="tag win">Cierre</span></td>
+          <td>2:52</td>
+          <td><div class="score-bar score-9"><div class="bar"><i style="width:85%"></i></div><span class="num">8.5</span></div></td>
+          <td>Cerrar pricing y forecast antes de onboarding</td>
+        </tr>
+        <tr>
+          <td>15-abr</td><td>Juan Maturana (1ra)</td>
+          <td><span class="tag discovery">Discovery</span></td>
+          <td>6:55</td>
+          <td><div class="score-bar score-7"><div class="bar"><i style="width:75%"></i></div><span class="num">7.5</span></div></td>
+          <td>Confirmar recepción multicanal, no solo email</td>
+        </tr>
+        <tr>
+          <td>29-abr</td><td>William & Co (Joey)</td>
+          <td><span class="tag handoff">Handoff</span></td>
+          <td>5:26</td>
+          <td><div class="score-bar score-7"><div class="bar"><i style="width:70%"></i></div><span class="num">7.0</span></div></td>
+          <td>Cuantificar overflow e identificar competidor primario</td>
+        </tr>
+        <tr>
+          <td>21-abr</td><td>Juan Maturana (2da)</td>
+          <td><span class="tag recovery">Recovery</span></td>
+          <td>3:47</td>
+          <td><div class="score-bar score-6"><div class="bar"><i style="width:65%"></i></div><span class="num">6.5</span></div></td>
+          <td>Validar siempre recepción dentro de 24h</td>
+        </tr>
+        <tr>
+          <td>16-abr</td><td>Peter (overflow lab)</td>
+          <td><span class="tag objection">Objeción</span></td>
+          <td>—</td>
+          <td><div class="score-bar score-6"><div class="bar"><i style="width:65%"></i></div><span class="num">6.5</span></div></td>
+          <td>Proponer caso piloto Rush, no solo enviar PDF</td>
+        </tr>
+        <tr>
+          <td>16-abr</td><td>Scott Adams</td>
+          <td><span class="tag handoff">Handoff</span></td>
+          <td>1:15</td>
+          <td><div class="score-bar score-6"><div class="bar"><i style="width:60%"></i></div><span class="num">6.0</span></div></td>
+          <td>Llamada corta: profundizar satisfacción y nuevas necesidades</td>
+        </tr>
+        <tr>
+          <td>16-abr</td><td>Chris Campbell</td>
+          <td><span class="tag discovery">Cross-sell</span></td>
+          <td>3:09</td>
+          <td><div class="score-bar score-6"><div class="bar"><i style="width:60%"></i></div><span class="num">6.0</span></div></td>
+          <td>Conseguir contacto directo del decisor, no recepcionista</td>
+        </tr>
+        <tr>
+          <td>30-abr</td><td>Barbara Tejos (Selinger)</td>
+          <td><span class="tag weak">Gatekeeper</span></td>
+          <td>2:28</td>
+          <td><div class="score-bar score-5"><div class="bar"><i style="width:55%"></i></div><span class="num">5.5</span></div></td>
+          <td>Pedir nombre y canal directo del decisor</td>
+        </tr>
+        <tr>
+          <td>08-abr</td><td>Omicron Dental</td>
+          <td><span class="tag discovery">Discovery flojo</span></td>
+          <td>1:26</td>
+          <td><div class="score-bar score-5"><div class="bar"><i style="width:45%"></i></div><span class="num">4.5</span></div></td>
+          <td>Aplicar 3 preguntas SPIN antes de aceptar "mándame info"</td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+
+  <!-- INSIGHTS -->
+  <h2>Insights y alertas para directorio</h2>
+
+  <div class="insight win">
+    <strong>🏆 Reactivación destacada:</strong> En la semana del 21 de abril, Laura logró reactivar dos cuentas (Better Smile y Samer Riad) que terminaron en compromiso de outsourcing oficial. Ambas son cuentas que estaban dormidas — buen ejemplo de prospección consultiva.
+  </div>
+
+  <div class="insight">
+    <strong>📈 Curva de aprendizaje positiva:</strong> El score promedio de las llamadas posteriores al 15 de abril (7.0) supera a las anteriores (5.8). La calidad de la conversación está mejorando incluso si el volumen no.
+  </div>
+
+  <div class="insight warn">
+    <strong>⚠️ Email-dependence:</strong> 4 de 10 conversaciones terminaron con compromiso de "te lo mando por correo". En el caso de Juan Maturana, el email no llegó y se perdieron 6 días. <strong>Recomendación:</strong> implementar confirmación multicanal vía WhatsApp dentro de las 2h.
+  </div>
+
+  <div class="insight warn">
+    <strong>⚠️ Marcado repetitivo sin variar canal:</strong> ENS Dental (3x el 30-abr), Bonadent (3x), Sami Yared (3x) y Alaa Eddin (3x) recibieron marcaciones consecutivas sin respuesta. Sugerencia: secuencia voz → WhatsApp → email personalizado → reintento en horario diferente.
+  </div>
+
+  <div class="insight warn">
+    <strong>🔧 Alerta técnica:</strong> 5 llamadas FAILED a Chris Campbell el 15-abr entre 15:14 y 15:20 (todas 0s) sugieren un problema de marcado/SIP. Revisar con TI.
+  </div>
+
+  <div class="insight">
+    <strong>📋 Asignación de empresas:</strong> Laura tiene 22 contactos asignados pero 0 empresas. Verificar el flujo de propiedad para que la cuenta padre se asigne automáticamente cuando un contacto cambia de owner.
+  </div>
+
+  <h2>Acciones priorizadas</h2>
+  <div class="card">
+    <ol style="margin:0; padding-left:20px; line-height:2;">
+      <li><strong>Capacitación SPIN</strong> — sesión de 1h con foco en discovery antes de aceptar "mándame info por correo".</li>
+      <li><strong>Playbook de confirmación de envío</strong> — checklist post-cotización: WhatsApp en 2h + recordatorio en HubSpot.</li>
+      <li><strong>Cadencia multicanal</strong> — definir secuencia voz/WhatsApp/email para evitar 3 marcados al mismo número.</li>
+      <li><strong>Auditoría técnica</strong> — investigar fails masivos de marcado del 15-abr.</li>
+      <li><strong>Auto-asignación de empresas</strong> — workflow en HubSpot para sincronizar `hubspot_owner_id` contacto→empresa.</li>
+    </ol>
+  </div>
+
+  <footer>
+    Generado con datos de HubSpot · Portal 6257770 · weCAD4you (SOi Digital)<br>
+    4 llamadas filtradas (códigos 2FA del +14157234000 — 31-mar)
+  </footer>
+
+</div>
+
+<script>
+Chart.register(ChartDataLabels);
+Chart.defaults.color = '#93a0c2';
+Chart.defaults.font.family = "'Inter', -apple-system, sans-serif";
+Chart.defaults.font.size = 11;
+Chart.defaults.plugins.datalabels.display = false;
+
+const grid = { color: 'rgba(255,255,255,0.05)', drawBorder: false };
+
+// 1. Daily chart (stacked bar)
+new Chart(document.getElementById('dailyChart'), {
+  type: 'bar',
+  data: {
+    labels: ['25-mar','31-mar','08-abr','15-abr','16-abr','21-abr','29-abr','30-abr'],
+    datasets: [
+      { label: 'Conectadas',  data: [0,0,1,1,4,3,1,1], backgroundColor: '#34d399', borderRadius: 6, stack: 's' },
+      { label: 'Sin respuesta', data: [0,0,3,0,2,4,0,3], backgroundColor: '#fbbf24', borderRadius: 6, stack: 's' },
+      { label: 'Failed/Otros', data: [1,0,4,5,1,1,1,0], backgroundColor: '#f87171', borderRadius: 6, stack: 's' }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, padding: 12 } } },
+    scales: {
+      x: { grid: { display: false }, stacked: true },
+      y: { grid: grid, stacked: true, ticks: { stepSize: 1 } }
+    }
+  }
+});
+
+// 2. Weekly chart (line + area)
+new Chart(document.getElementById('weeklyChart'), {
+  type: 'line',
+  data: {
+    labels: ['W13','W14','W15','W16','W17','W18'],
+    datasets: [{
+      label: 'Llamadas / semana',
+      data: [1,0,8,11,8,6],
+      borderColor: '#6c8cff',
+      backgroundColor: 'rgba(108,140,255,0.18)',
+      fill: true,
+      tension: 0.35,
+      pointRadius: 5,
+      pointBackgroundColor: '#6c8cff',
+      pointBorderColor: '#fff',
+      pointBorderWidth: 2
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      datalabels: {
+        display: true, align: 'top', anchor: 'end',
+        color: '#e6eaf2', font: { weight: '700', size: 11 }
+      }
+    },
+    scales: {
+      x: { grid: { display: false } },
+      y: { grid: grid, beginAtZero: true, ticks: { stepSize: 2 } }
+    }
+  }
+});
+
+// 3. Disposition donut
+new Chart(document.getElementById('dispositionChart'), {
+  type: 'doughnut',
+  data: {
+    labels: ['Conectado','Sin respuesta','Failed/Sin disposición','Missed inbound','Cancelada'],
+    datasets: [{
+      data: [10,13,8,2,1],
+      backgroundColor: ['#34d399','#fbbf24','#f87171','#a78bfa','#93a0c2'],
+      borderColor: '#161e3d',
+      borderWidth: 3
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    cutout: '62%',
+    plugins: {
+      legend: { position: 'right', labels: { boxWidth: 12, padding: 10 } },
+      datalabels: {
+        display: true,
+        color: '#0b1020',
+        font: { weight: '700', size: 12 },
+        formatter: (v, ctx) => {
+          const total = ctx.chart.data.datasets[0].data.reduce((a,b)=>a+b,0);
+          return Math.round(v/total*100) + '%';
+        }
+      }
+    }
+  }
+});
+
+// 4. Connection rate per day (line %)
+new Chart(document.getElementById('connectionRateChart'), {
+  type: 'bar',
+  data: {
+    labels: ['25-mar','31-mar','08-abr','15-abr','16-abr','21-abr','29-abr','30-abr'],
+    datasets: [{
+      label: '% Conexión',
+      data: [0,0,12.5,16.7,80,37.5,50,25],
+      backgroundColor: ctx => {
+        const v = ctx.raw;
+        if (v >= 60) return '#34d399';
+        if (v >= 30) return '#6c8cff';
+        if (v >= 15) return '#fbbf24';
+        return '#f87171';
+      },
+      borderRadius: 6
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      datalabels: {
+        display: true, anchor: 'end', align: 'top',
+        color: '#e6eaf2', font: { weight: '700', size: 10 },
+        formatter: v => v > 0 ? v.toFixed(0) + '%' : ''
+      }
+    },
+    scales: {
+      x: { grid: { display: false } },
+      y: { grid: grid, beginAtZero: true, max: 100, ticks: { callback: v => v + '%' } }
+    }
+  }
+});
+</script>
+</body>
+</html>
