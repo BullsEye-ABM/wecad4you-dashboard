@@ -160,12 +160,71 @@ html, body, [data-testid="stAppViewContainer"] {
 .insight strong { color: var(--text); }
 
 /* Streamlit overrides */
-[data-testid="stSidebar"] { background: var(--card); border-right: 1px solid var(--border); }
+[data-testid="stSidebar"] { background: var(--card) !important; border-right: 1px solid var(--border); }
+[data-testid="stSidebar"] * { color: var(--text) !important; }
+[data-testid="stSidebar"] label,
+[data-testid="stSidebar"] [data-testid="stCaptionContainer"],
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] small {
+  color: var(--text-dim) !important;
+}
+[data-testid="stSidebar"] h3 { color: var(--text) !important; font-size: 14px !important; letter-spacing: 1px; }
+[data-testid="stSidebar"] [data-baseweb="select"] > div,
+[data-testid="stSidebar"] [data-baseweb="input"] > div {
+  background: rgba(255,255,255,0.03) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text) !important;
+}
+[data-testid="stSidebar"] [data-baseweb="select"] svg { fill: var(--text-dim) !important; }
+[data-testid="stSidebar"] [data-baseweb="popover"] li { color: var(--text) !important; }
+[data-testid="stSidebar"] hr { border-color: var(--border) !important; }
+[data-testid="stSidebar"] .stButton button {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2)) !important;
+  color: #0a0e22 !important;
+  border: none !important;
+  font-weight: 600 !important;
+}
 .stTabs [data-baseweb="tab-list"] { gap: 4px; }
 .stTabs [data-baseweb="tab"] { padding: 8px 16px; }
 hr { margin: 1.2rem 0; border-color: var(--border); }
+
+/* Custom dark data tables */
+.dt {
+  width: 100%; border-collapse: collapse; font-size: 13px;
+  background: var(--card); border-radius: 12px; overflow: hidden;
+  border: 1px solid var(--border); margin-bottom: 8px;
+}
+.dt th, .dt td {
+  padding: 10px 14px; text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.dt th {
+  color: var(--text-dim); font-weight: 600; font-size: 11px;
+  text-transform: uppercase; letter-spacing: 1px;
+  background: rgba(255,255,255,.02);
+}
+.dt td { color: var(--text); }
+.dt tr:last-child td { border-bottom: none; }
+.dt tr:hover td { background: rgba(255,255,255,.02); }
+.dt-wrap { max-height: 420px; overflow-y: auto; border-radius: 12px; }
 </style>
 """, unsafe_allow_html=True)
+
+
+def _data_table(df, columns):
+    """Render a DataFrame as a dark-styled HTML table."""
+    if df is None or df.empty:
+        return '<div class="card"><em style="color:var(--text-dim)">Sin datos.</em></div>'
+    headers = "".join(f"<th>{c}</th>" for c in columns)
+    rows = []
+    for _, row in df.iterrows():
+        cells = "".join(f"<td>{row.get(c, '') if hasattr(row, 'get') else (row[c] if c in row else '')}</td>" for c in columns)
+        rows.append(f"<tr>{cells}</tr>")
+    return (
+        f'<div class="dt-wrap"><table class="dt">'
+        f'<thead><tr>{headers}</tr></thead>'
+        f'<tbody>{"".join(rows)}</tbody>'
+        f'</table></div>'
+    )
 
 
 # ─────────────────────────────────────────
@@ -668,7 +727,7 @@ with tab1:
     show["timestamp"] = show["timestamp"].dt.tz_convert("America/Santiago").dt.strftime("%Y-%m-%d %H:%M")
     show["duration_min"] = show["duration_min"].round(1)
     show.columns = ["Fecha/Hora", "Título", "Disposición", "Dirección", "Duración (min)", "Status"]
-    st.dataframe(show, use_container_width=True, hide_index=True, height=400)
+    st.markdown(_data_table(show, show.columns.tolist()), unsafe_allow_html=True)
 
 with tab2:
     if connected.empty:
@@ -696,7 +755,7 @@ with tab3:
         if contacts:
             df_c = pd.DataFrame(contacts)
             keep = [k for k in ["firstname", "lastname", "email", "lifecyclestage", "createdate"] if k in df_c.columns]
-            st.dataframe(df_c[keep], use_container_width=True, hide_index=True, height=320)
+            st.markdown(_data_table(df_c[keep], keep), unsafe_allow_html=True)
         else:
             st.caption("Sin contactos en el rango.")
     with cc2:
@@ -704,7 +763,7 @@ with tab3:
         if companies:
             df_co = pd.DataFrame(companies)
             keep = [k for k in ["name", "domain", "createdate"] if k in df_co.columns]
-            st.dataframe(df_co[keep], use_container_width=True, hide_index=True, height=320)
+            st.markdown(_data_table(df_co[keep], keep), unsafe_allow_html=True)
         else:
             st.caption("Sin empresas asignadas en el rango.")
 
