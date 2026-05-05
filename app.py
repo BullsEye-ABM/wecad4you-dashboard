@@ -1,23 +1,26 @@
 """
 Dashboard Semanal · Actividad SDR · weCAD4you (SOi Digital)
 Streamlit + HubSpot API · Caché 15 min
+Versión pro: incluye categorización automática y scorecard de coaching consultivo.
 """
 
 from __future__ import annotations
 
+import re
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
+import plotly.express as px
 import streamlit as st
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from utils.hubspot import (
     list_owners, get_calls, get_contacts, get_companies, count_owned_total,
 )
 from utils.periods import PERIOD_OPTIONS, get_period_dates, to_ms, to_ms_end
 
+
 # ─────────────────────────────────────────
-#  Page config & styling
+#  Page config & CSS
 # ─────────────────────────────────────────
 st.set_page_config(
     page_title="weCAD4you · Dashboard SDR",
@@ -28,28 +31,212 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-.block-container { padding-top: 2rem; padding-bottom: 3rem; max-width: 1400px; }
-[data-testid="stMetricValue"] { font-size: 2rem; }
-[data-testid="stMetricLabel"] { font-size: .85rem; text-transform: uppercase; letter-spacing: 1px; color: #93a0c2; }
+:root {
+  --bg: #0b1020; --card: #161e3d; --border: #243056;
+  --text: #e6eaf2; --text-dim: #93a0c2;
+  --accent: #6c8cff; --accent-2: #4cc9f0;
+  --green: #34d399; --amber: #fbbf24; --red: #f87171;
+  --purple: #a78bfa; --pink: #f472b6;
+}
+html, body, [data-testid="stAppViewContainer"] {
+  background: linear-gradient(180deg, #0a0e22 0%, #0b1020 100%);
+  color: var(--text);
+}
+[data-testid="stHeader"] { background: transparent; }
+.block-container { padding-top: 1.5rem; padding-bottom: 4rem; max-width: 1400px; }
+
+/* Brand header */
+.brand-header {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  border-bottom: 1px solid var(--border); padding-bottom: 18px; margin-bottom: 24px;
+  gap: 20px; flex-wrap: wrap;
+}
+.brand-left { display: flex; align-items: center; gap: 14px; }
+.brand-logo {
+  width: 48px; height: 48px; border-radius: 12px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 800; font-size: 22px; color: #0a0e22;
+}
+.brand-title { font-size: 22px; font-weight: 700; margin: 0; color: var(--text); }
+.brand-sub { font-size: 13px; color: var(--text-dim); margin: 2px 0 0; }
+.brand-right { text-align: right; font-size: 13px; color: var(--text-dim); }
+.brand-right strong { color: var(--text); display: block; font-size: 14px; }
+.pill {
+  display: inline-block; padding: 4px 10px; border-radius: 999px;
+  background: rgba(108,140,255,.12); color: var(--accent);
+  font-size: 11px; font-weight: 600; margin-top: 6px;
+}
+
+/* Section titles */
+.section-title {
+  font-size: 12px; text-transform: uppercase; letter-spacing: 1.4px;
+  color: var(--text-dim); font-weight: 600; margin: 32px 0 12px;
+}
+
+/* KPI cards */
+.kpi-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 8px; }
+@media (max-width: 1100px) { .kpi-row { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 600px)  { .kpi-row { grid-template-columns: repeat(2, 1fr); } }
+.kpi {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 14px; padding: 16px;
+}
+.kpi-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); margin-bottom: 8px; font-weight: 600; }
+.kpi-value { font-size: 28px; font-weight: 700; letter-spacing: -.5px; line-height: 1.1; }
+.kpi-sub { font-size: 11.5px; color: var(--text-dim); margin-top: 4px; }
+.kpi.accent .kpi-value { color: var(--accent); }
+.kpi.green  .kpi-value { color: var(--green); }
+.kpi.amber  .kpi-value { color: var(--amber); }
+.kpi.red    .kpi-value { color: var(--red); }
+.kpi.purple .kpi-value { color: var(--purple); }
+
+/* Cards generic */
+.card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 14px; padding: 18px;
+}
+
+/* Categories grid */
+.cat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+@media (max-width: 900px) { .cat-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 600px) { .cat-grid { grid-template-columns: 1fr; } }
+.cat-card {
+  border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px;
+  background: linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0));
+}
+.cat-badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 700; margin-bottom: 8px; }
+.cat-name { font-size: 13px; color: var(--text-dim); margin-bottom: 4px; }
+.cat-num  { font-size: 26px; font-weight: 700; line-height: 1; }
+.cat-ex   { font-size: 11px; color: var(--text-dim); margin-top: 8px; line-height: 1.5; }
+.b-win        { background: rgba(52,211,153,.15);  color: var(--green); }
+.b-handoff    { background: rgba(76,201,240,.15);  color: var(--accent-2); }
+.b-discovery  { background: rgba(167,139,250,.15); color: var(--purple); }
+.b-gatekeeper { background: rgba(248,113,113,.15); color: var(--red); }
+.b-recovery   { background: rgba(108,140,255,.15); color: var(--accent); }
+.b-objection  { background: rgba(251,191,36,.15);  color: var(--amber); }
+
+/* Scorecard */
+.tag {
+  display: inline-block; padding: 2px 10px; border-radius: 6px;
+  font-size: 11px; font-weight: 600;
+}
+.tag-win        { background: rgba(52,211,153,.15);  color: var(--green); }
+.tag-handoff    { background: rgba(76,201,240,.15);  color: var(--accent-2); }
+.tag-discovery  { background: rgba(167,139,250,.15); color: var(--purple); }
+.tag-gatekeeper { background: rgba(248,113,113,.15); color: var(--red); }
+.tag-recovery   { background: rgba(108,140,255,.15); color: var(--accent); }
+.tag-objection  { background: rgba(251,191,36,.15);  color: var(--amber); }
+
+.scorecard-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.scorecard-table th, .scorecard-table td {
+  padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border);
+}
+.scorecard-table th { color: var(--text-dim); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
+.score-bar {
+  display: flex; align-items: center; gap: 10px; min-width: 130px;
+}
+.score-bar .bar {
+  height: 6px; border-radius: 4px; background: rgba(255,255,255,.08);
+  flex: 1; overflow: hidden; position: relative;
+}
+.score-bar .bar i {
+  position: absolute; top: 0; left: 0; bottom: 0; border-radius: 4px;
+}
+.score-bar .num { font-weight: 700; min-width: 32px; }
+.s9 i { background: var(--green); }
+.s7 i { background: var(--accent); }
+.s6 i { background: var(--amber); }
+.s5 i { background: var(--red); }
+
+/* Insights */
+.insight {
+  border-left: 3px solid var(--accent); padding: 12px 16px; margin: 10px 0;
+  background: rgba(108,140,255,.06); border-radius: 6px;
+  font-size: 13.5px; line-height: 1.6; color: var(--text);
+}
+.insight.warn { border-color: var(--amber); background: rgba(251,191,36,.06); }
+.insight.win  { border-color: var(--green); background: rgba(52,211,153,.06); }
+.insight strong { color: var(--text); }
+
+/* Streamlit overrides */
+[data-testid="stSidebar"] { background: var(--card); border-right: 1px solid var(--border); }
 .stTabs [data-baseweb="tab-list"] { gap: 4px; }
 .stTabs [data-baseweb="tab"] { padding: 8px 16px; }
-hr { margin: 1.2rem 0; }
-.brand-header {
-  display:flex;align-items:center;gap:14px;
-  border-bottom:1px solid #243056;padding-bottom:14px;margin-bottom:18px;
-}
-.brand-logo {
-  width:42px;height:42px;border-radius:10px;
-  background:linear-gradient(135deg,#6c8cff,#4cc9f0);
-  display:flex;align-items:center;justify-content:center;
-  font-weight:800;color:#0a0e22;
-}
-.tag {display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;}
-.tag-good {background:rgba(52,211,153,.12);color:#34d399;}
-.tag-warn {background:rgba(251,191,36,.14);color:#fbbf24;}
-.tag-bad {background:rgba(248,113,113,.12);color:#f87171;}
+hr { margin: 1.2rem 0; border-color: var(--border); }
 </style>
 """, unsafe_allow_html=True)
+
+
+# ─────────────────────────────────────────
+#  Helpers: HTML stripping, categorization, scoring
+# ─────────────────────────────────────────
+
+CATEGORY_DEFS = [
+    # (key, label, badge_class, tag_class, keywords)
+    ("cierre",    "Cierre",            "b-win",        "tag-win",
+     ["outsourcing oficial", "free trial", "agendamos onboarding", "va a comenzar a externalizar",
+      "se cerró", "convirtió", "agendar reunion", "agendó reunión", "compromiso", "cliente oficial"]),
+    ("handoff",   "Handoff / Reasignación", "b-handoff", "tag-handoff",
+     ["reemplaz", "daniela", "maternidad", "nueva persona de contacto", "reasignación",
+      "nuevo contacto"]),
+    ("recovery",  "Recovery / Follow-up", "b-recovery", "tag-recovery",
+     ["no recibió", "no llegó", "reenvi", "correo no llegó", "reenviar", "verificar"]),
+    ("gatekeeper","Gatekeeper",        "b-gatekeeper", "tag-gatekeeper",
+     ["secretaria", "recepcionista", "no está disponible", "no se encuentra disponible",
+      "le va a transmitir", "le voy a avisar"]),
+    ("objection", "Objeción",          "b-objection",  "tag-objection",
+     ["tiempos de entrega", "rush", "objeción", "queja", "precio", "demasiado caro", "competidor"]),
+    ("discovery", "Discovery",         "b-discovery",  "tag-discovery",
+     ["info por correo", "envia info", "mandar email", "información", "cotización",
+      "tarifas", "precios", "más información"]),
+]
+
+
+def _strip_html(html: str) -> str:
+    if not html:
+        return ""
+    return re.sub(r"<[^>]+>", " ", html).lower()
+
+
+def categorize(call: dict) -> dict:
+    """Return {key, label, badge, tag} for a connected call."""
+    text = _strip_html(call.get("summary", "")) + " " + _strip_html(call.get("body", ""))
+    for key, label, badge, tag, keywords in CATEGORY_DEFS:
+        for kw in keywords:
+            if kw in text:
+                return {"key": key, "label": label, "badge": badge, "tag": tag}
+    # Default: Discovery
+    return {"key": "discovery", "label": "Discovery", "badge": "b-discovery", "tag": "tag-discovery"}
+
+
+def score_call(category_key: str, duration_min: float) -> tuple[float, str]:
+    """Heuristic score + improvement focus."""
+    if category_key == "cierre":
+        if duration_min > 3: return 9.0, "Documentar alcance del compromiso por escrito"
+        return 8.0, "Cerrar pricing y forecast en la misma llamada"
+    if category_key == "handoff":
+        if duration_min > 4: return 7.5, "Cuantificar volumen e identificar competidor primario"
+        if duration_min > 1.5: return 7.0, "Profundizar en satisfacción y necesidades nuevas"
+        return 5.5, "Llamada corta: explorar más oportunidades antes de cortar"
+    if category_key == "recovery":
+        return 6.5, "Validar recepción multicanal dentro de 24h"
+    if category_key == "discovery":
+        if duration_min > 5: return 7.5, "Confirmar recepción multicanal, no solo email"
+        if duration_min > 2: return 6.5, "Dar precios completos en llamada, no derivar todo a email"
+        return 4.5, "Aplicar 3 preguntas SPIN antes de aceptar 'mándame info'"
+    if category_key == "objection":
+        return 6.5, "Proponer caso piloto, no solo reenviar PDF/aranceles"
+    if category_key == "gatekeeper":
+        return 5.5, "Pedir nombre y canal directo del decisor"
+    return 6.0, "Profundizar discovery y agendar siguiente paso"
+
+
+def score_class(s: float) -> str:
+    if s >= 8: return "s9"
+    if s >= 7: return "s7"
+    if s >= 6: return "s6"
+    return "s5"
 
 
 # ─────────────────────────────────────────
@@ -57,44 +244,33 @@ hr { margin: 1.2rem 0; }
 # ─────────────────────────────────────────
 with st.sidebar:
     st.markdown("### 🎛️ Filtros")
-
-    # Periodo
     period = st.selectbox(
-        "Periodo",
-        PERIOD_OPTIONS,
-        index=0,
+        "Periodo", PERIOD_OPTIONS, index=0,
         help="Cambia el rango temporal del informe completo",
     )
     start_date, end_date = get_period_dates(period)
-    st.caption(
-        f"📅 {start_date.strftime('%d %b %Y')} → {end_date.strftime('%d %b %Y')}"
-    )
-
+    st.caption(f"📅 {start_date.strftime('%d %b %Y')} → {end_date.strftime('%d %b %Y')}")
     st.divider()
 
-    # Owner
     owners = list_owners()
     if not owners:
         st.error("No se encontraron usuarios en HubSpot.")
         st.stop()
 
     owner_labels = [f"{o['name']} · ID {o['id']}" for o in owners]
-    # Default: Laura Flechas if present
     default_idx = next(
-        (i for i, o in enumerate(owners) if "laura" in o["name"].lower() and "flecha" in o["name"].lower()),
+        (i for i, o in enumerate(owners)
+         if "laura" in o["name"].lower() and "flecha" in o["name"].lower()),
         0,
     )
     owner_choice = st.selectbox("Usuario (SDR)", owner_labels, index=default_idx)
     owner = owners[owner_labels.index(owner_choice)]
 
     st.divider()
-
-    # Refresh
     if st.button("🔄 Forzar actualización", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
-
-    st.caption("⏱️ Caché: 15 min · Datos en vivo desde HubSpot.")
+    st.caption("⏱️ Caché: 15 min · Datos en vivo")
     st.caption(f"🕐 Última carga: {datetime.now().strftime('%H:%M:%S')}")
 
 
@@ -103,19 +279,21 @@ with st.sidebar:
 # ─────────────────────────────────────────
 st.markdown(f"""
 <div class="brand-header">
-  <div class="brand-logo">w4</div>
-  <div>
-    <h1 style="margin:0;font-size:24px">Dashboard Semanal · Actividad SDR</h1>
-    <p style="margin:0;color:#93a0c2;font-size:13px">
-      <strong>{owner['name']}</strong> · weCAD4you (SOi Digital) · Owner ID {owner['id']}
-    </p>
+  <div class="brand-left">
+    <div class="brand-logo">w4</div>
+    <div>
+      <div class="brand-title">Dashboard Semanal · Actividad SDR</div>
+      <div class="brand-sub">{owner['name']} · weCAD4you (SOi Digital)</div>
+    </div>
+  </div>
+  <div class="brand-right">
+    <strong>Reunión Comité — Martes</strong>
+    <span>Datos al {datetime.now().strftime('%d %b %Y')}</span><br>
+    <span>Periodo: {start_date.strftime('%d %b %Y')} → {end_date.strftime('%d %b %Y')}</span>
+    <div class="pill">Owner ID {owner['id']} · Portal 6257770</div>
   </div>
 </div>
 """, unsafe_allow_html=True)
-
-st.caption(
-    f"🗓️ Periodo: **{period}** · {start_date.strftime('%d %b %Y')} → {end_date.strftime('%d %b %Y')}"
-)
 
 
 # ─────────────────────────────────────────
@@ -130,192 +308,385 @@ companies = get_companies(owner["id"], start_ms, end_ms)
 total_contacts = count_owned_total("contacts", owner["id"])
 total_companies = count_owned_total("companies", owner["id"])
 
+df = pd.DataFrame(calls)
+if not df.empty:
+    df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce", utc=True)
+    df = df.dropna(subset=["timestamp"])
+    df["date"] = df["timestamp"].dt.tz_convert("America/Santiago").dt.date
+    df["duration_min"] = df["duration_ms"] / 60000
+
+connected = df[df["disposition"] == "Conectado"] if not df.empty else pd.DataFrame()
+outbound = df[df["direction"] == "OUTBOUND"] if not df.empty else pd.DataFrame()
+
+# Categorize connected calls
+cat_results = []
+score_results = []
+for _, c in connected.iterrows():
+    cat = categorize(c.to_dict())
+    s, focus = score_call(cat["key"], c["duration_min"])
+    cat_results.append(cat)
+    score_results.append({"score": s, "focus": focus})
+
+avg_score = round(sum(s["score"] for s in score_results) / len(score_results), 1) if score_results else 0
+
 
 # ─────────────────────────────────────────
 #  KPIs
 # ─────────────────────────────────────────
-df_calls = pd.DataFrame(calls)
-if not df_calls.empty:
-    df_calls["timestamp"] = pd.to_datetime(df_calls["timestamp"], errors="coerce", utc=True)
-    df_calls = df_calls.dropna(subset=["timestamp"])
-    df_calls["date"] = df_calls["timestamp"].dt.tz_convert("America/Santiago").dt.date
-    df_calls["week"] = df_calls["timestamp"].dt.isocalendar().week
-    df_calls["duration_min"] = df_calls["duration_ms"] / 60000
-
-connected = df_calls[df_calls["disposition"] == "Conectado"] if not df_calls.empty else pd.DataFrame()
-outbound = df_calls[df_calls["direction"] == "OUTBOUND"] if not df_calls.empty else pd.DataFrame()
-
-total_calls = len(df_calls)
+total_calls = len(df)
 total_connected = len(connected)
 conn_rate = (total_connected / len(outbound) * 100) if len(outbound) > 0 else 0
 avg_duration = connected["duration_min"].mean() if not connected.empty else 0
+inbound_count = len(df) - len(outbound) if not df.empty else 0
 
-c1, c2, c3, c4, c5, c6 = st.columns(6)
-c1.metric("Llamadas", f"{total_calls}", help="2FA filtrado automáticamente")
-c2.metric("Conectadas", f"{total_connected}")
-c3.metric("Tasa conexión", f"{conn_rate:.1f}%", help="Conectadas / Outbound")
-c4.metric(
-    "Duración promedio",
-    f"{int(avg_duration)}:{int((avg_duration%1)*60):02d}" if avg_duration else "–",
-    help="Sobre llamadas conectadas",
-)
-c5.metric("Contactos (periodo)", f"{len(contacts)}", help=f"Total asignados: {total_contacts}")
-c6.metric("Empresas (periodo)", f"{len(companies)}", help=f"Total asignadas: {total_companies}")
+def fmt_duration(mins: float) -> str:
+    if not mins: return "–"
+    m = int(mins); s = int((mins - m) * 60)
+    return f"{m}:{s:02d}"
 
-st.divider()
+st.markdown('<div class="section-title">Indicadores clave</div>', unsafe_allow_html=True)
+st.markdown(f"""
+<div class="kpi-row">
+  <div class="kpi accent">
+    <div class="kpi-label">Llamadas (filtradas)</div>
+    <div class="kpi-value">{total_calls}</div>
+    <div class="kpi-sub">Outbound: {len(outbound)} · Inbound real: {inbound_count}</div>
+  </div>
+  <div class="kpi green">
+    <div class="kpi-label">Conectadas</div>
+    <div class="kpi-value">{total_connected}</div>
+    <div class="kpi-sub">Hubo conversación efectiva</div>
+  </div>
+  <div class="kpi amber">
+    <div class="kpi-label">Tasa de conexión</div>
+    <div class="kpi-value">{conn_rate:.1f}%</div>
+    <div class="kpi-sub">Conectadas / Outbound</div>
+  </div>
+  <div class="kpi purple">
+    <div class="kpi-label">Duración promedio</div>
+    <div class="kpi-value">{fmt_duration(avg_duration)}</div>
+    <div class="kpi-sub">Llamadas conectadas</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Contactos asignados</div>
+    <div class="kpi-value">{len(contacts)}</div>
+    <div class="kpi-sub">Total histórico: {total_contacts}{' · ⚠️ Empresas: 0' if total_companies == 0 else f' · Empresas: {total_companies}'}</div>
+  </div>
+  <div class="kpi green">
+    <div class="kpi-label">Score promedio</div>
+    <div class="kpi-value">{avg_score if avg_score else '–'}<span style="font-size:14px;color:var(--text-dim)">/10</span></div>
+    <div class="kpi-sub">Coaching consultivo</div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
 
-if df_calls.empty:
+if df.empty:
     st.info("📭 No hay llamadas en este periodo para el usuario seleccionado.")
     st.stop()
 
 
 # ─────────────────────────────────────────
-#  Charts: Activity timeline
+#  Charts: temporal
 # ─────────────────────────────────────────
-st.subheader("📅 Actividad temporal")
-
+st.markdown('<div class="section-title">Actividad temporal</div>', unsafe_allow_html=True)
 col_a, col_b = st.columns([2, 1])
+
+PLOT_TEMPLATE = dict(
+    paper_bgcolor="rgba(0,0,0,0)",
+    plot_bgcolor="rgba(0,0,0,0)",
+    font=dict(color="#93a0c2", family="Inter, sans-serif"),
+    margin=dict(t=50, b=20, l=20, r=20),
+)
 
 with col_a:
     daily = (
-        df_calls.assign(
+        df.assign(
             connected=lambda x: (x["disposition"] == "Conectado").astype(int),
             no_answer=lambda x: (x["disposition"] == "Sin respuesta").astype(int),
             other=lambda x: (~x["disposition"].isin(["Conectado", "Sin respuesta"])).astype(int),
         )
-        .groupby("date")[["connected", "no_answer", "other"]]
-        .sum()
-        .reset_index()
+        .groupby("date")[["connected", "no_answer", "other"]].sum().reset_index()
+        .sort_values("date")
     )
     fig = go.Figure()
     fig.add_bar(x=daily["date"], y=daily["connected"], name="Conectadas", marker_color="#34d399")
     fig.add_bar(x=daily["date"], y=daily["no_answer"], name="Sin respuesta", marker_color="#fbbf24")
     fig.add_bar(x=daily["date"], y=daily["other"], name="Otros/Failed", marker_color="#f87171")
     fig.update_layout(
-        barmode="stack",
-        title="Llamadas por día",
-        height=380,
-        margin=dict(t=50, b=20, l=20, r=20),
+        title=dict(text="Llamadas por día", font=dict(color="#e6eaf2", size=15)),
+        barmode="stack", height=380,
         legend=dict(orientation="h", y=-0.2),
-        xaxis_title=None,
-        yaxis_title="Llamadas",
+        xaxis=dict(showgrid=False), yaxis=dict(gridcolor="rgba(255,255,255,0.05)"),
+        **PLOT_TEMPLATE,
     )
     st.plotly_chart(fig, use_container_width=True)
 
 with col_b:
     weekly = (
-        df_calls.assign(week=df_calls["timestamp"].dt.tz_convert("America/Santiago").dt.strftime("W%V"))
-        .groupby("week")
-        .size()
-        .reset_index(name="calls")
-        .sort_values("week")
+        df.assign(week=df["timestamp"].dt.tz_convert("America/Santiago").dt.strftime("W%V"))
+        .groupby("week").size().reset_index(name="calls").sort_values("week")
     )
-    fig2 = px.area(
-        weekly, x="week", y="calls",
-        title="Volumen por semana ISO",
-        markers=True,
-    )
-    fig2.update_traces(
-        line_color="#6c8cff",
+    fig2 = go.Figure()
+    fig2.add_trace(go.Scatter(
+        x=weekly["week"], y=weekly["calls"], mode="lines+markers+text",
+        line=dict(color="#6c8cff", width=3), fill="tozeroy",
         fillcolor="rgba(108,140,255,0.18)",
-        marker=dict(size=10, color="#6c8cff"),
-    )
+        marker=dict(size=10, color="#6c8cff", line=dict(color="#fff", width=2)),
+        text=weekly["calls"], textposition="top center",
+        textfont=dict(color="#e6eaf2", size=12),
+    ))
     fig2.update_layout(
-        height=380,
-        margin=dict(t=50, b=20, l=20, r=20),
-        xaxis_title=None,
-        yaxis_title="Llamadas",
+        title=dict(text="Por semana ISO", font=dict(color="#e6eaf2", size=15)),
+        height=380, showlegend=False,
+        xaxis=dict(showgrid=False), yaxis=dict(gridcolor="rgba(255,255,255,0.05)"),
+        **PLOT_TEMPLATE,
     )
     st.plotly_chart(fig2, use_container_width=True)
 
 
 # ─────────────────────────────────────────
-#  Charts: Outcomes
+#  Charts: outcomes
 # ─────────────────────────────────────────
-st.subheader("📊 Resultados de llamadas")
-
-col_d, col_e = st.columns([1, 1])
+st.markdown('<div class="section-title">Resultados de las llamadas</div>', unsafe_allow_html=True)
+col_d, col_e = st.columns(2)
 
 with col_d:
-    disp = df_calls["disposition"].value_counts().reset_index()
+    disp = df["disposition"].value_counts().reset_index()
     disp.columns = ["disposition", "count"]
     color_map = {
-        "Conectado": "#34d399",
-        "Sin respuesta": "#fbbf24",
-        "Sin disposición": "#f87171",
-        "Ocupado": "#a78bfa",
-        "Dejó mensaje en directo": "#4cc9f0",
-        "Dejó mensaje de voz": "#4cc9f0",
+        "Conectado": "#34d399", "Sin respuesta": "#fbbf24",
+        "Sin disposición": "#f87171", "Ocupado": "#a78bfa",
+        "Dejó mensaje en directo": "#4cc9f0", "Dejó mensaje de voz": "#4cc9f0",
         "Número incorrecto": "#93a0c2",
     }
     fig3 = px.pie(
         disp, names="disposition", values="count",
-        title="Distribución por status",
-        color="disposition",
-        color_discrete_map=color_map,
-        hole=0.55,
+        color="disposition", color_discrete_map=color_map, hole=0.55,
     )
-    fig3.update_traces(textinfo="percent+label", textposition="outside")
-    fig3.update_layout(height=400, margin=dict(t=50, b=20, l=20, r=20))
+    fig3.update_traces(textinfo="percent+label", textposition="outside",
+                       marker=dict(line=dict(color="#161e3d", width=3)))
+    fig3.update_layout(
+        title=dict(text="Distribución por status", font=dict(color="#e6eaf2", size=15)),
+        height=400, **PLOT_TEMPLATE,
+    )
     st.plotly_chart(fig3, use_container_width=True)
 
 with col_e:
-    # Connection rate per day
     daily_rate = (
-        df_calls[df_calls["direction"] == "OUTBOUND"]
+        df[df["direction"] == "OUTBOUND"]
         .assign(is_conn=lambda x: (x["disposition"] == "Conectado").astype(int))
-        .groupby("date")
-        .agg(total=("is_conn", "size"), connected=("is_conn", "sum"))
-        .reset_index()
+        .groupby("date").agg(total=("is_conn", "size"), connected=("is_conn", "sum")).reset_index()
     )
     if not daily_rate.empty:
         daily_rate["rate"] = daily_rate["connected"] / daily_rate["total"] * 100
-        fig4 = px.bar(
-            daily_rate, x="date", y="rate",
-            title="% Conexión por día",
-            color="rate",
-            color_continuous_scale=[(0, "#f87171"), (0.5, "#fbbf24"), (1, "#34d399")],
-            range_color=(0, 100),
+
+        def color_for(v):
+            if v >= 60: return "#34d399"
+            if v >= 30: return "#6c8cff"
+            if v >= 15: return "#fbbf24"
+            return "#f87171"
+
+        fig4 = go.Figure()
+        fig4.add_bar(
+            x=daily_rate["date"], y=daily_rate["rate"],
+            marker_color=[color_for(v) for v in daily_rate["rate"]],
+            text=[f"{v:.0f}%" for v in daily_rate["rate"]], textposition="outside",
+            textfont=dict(color="#e6eaf2"),
         )
         fig4.update_layout(
+            title=dict(text="% Conexión por día", font=dict(color="#e6eaf2", size=15)),
             height=400,
-            margin=dict(t=50, b=20, l=20, r=20),
-            xaxis_title=None,
-            yaxis_title="% Conexión",
-            yaxis=dict(range=[0, 100], ticksuffix="%"),
-            coloraxis_showscale=False,
+            xaxis=dict(showgrid=False),
+            yaxis=dict(gridcolor="rgba(255,255,255,0.05)", range=[0, 110], ticksuffix="%"),
+            **PLOT_TEMPLATE,
         )
-        fig4.update_traces(texttemplate="%{y:.0f}%", textposition="outside")
         st.plotly_chart(fig4, use_container_width=True)
 
 
 # ─────────────────────────────────────────
-#  Tabs: Detail tables
+#  Categories of prospect response
 # ─────────────────────────────────────────
-st.subheader("🔎 Detalle")
+st.markdown('<div class="section-title">Categorías de respuesta del prospecto</div>', unsafe_allow_html=True)
+st.caption(f"Análisis automático sobre las {len(connected)} conversaciones efectivas, según transcripciones IA.")
 
-tab_calls, tab_summaries, tab_contacts = st.tabs([
+if connected.empty:
+    st.info("Sin conversaciones conectadas en este periodo.")
+else:
+    # Build dict of category → list of examples (display name + brief body)
+    cat_buckets: dict[str, dict] = {}
+    for (_, c), cat in zip(connected.iterrows(), cat_results):
+        bucket = cat_buckets.setdefault(cat["key"], {"label": cat["label"], "badge": cat["badge"], "calls": []})
+        # Try to extract a useful display name
+        title = c.get("title", "").replace("Llamada con ", "")
+        bucket["calls"].append(title or "Sin título")
+
+    # Render in the same order as CATEGORY_DEFS
+    cards_html = '<div class="cat-grid">'
+    for key, label, badge, tag, _ in CATEGORY_DEFS:
+        bucket = cat_buckets.get(key)
+        if not bucket:
+            continue
+        examples = " · ".join(bucket["calls"][:3])
+        if len(bucket["calls"]) > 3:
+            examples += f" · +{len(bucket['calls']) - 3}"
+        cards_html += f"""
+          <div class="cat-card">
+            <span class="cat-badge {badge}">{label.split(' /')[0].upper()}</span>
+            <div class="cat-name">{label}</div>
+            <div class="cat-num">{len(bucket['calls'])}</div>
+            <div class="cat-ex">{examples}</div>
+          </div>
+        """
+    cards_html += "</div>"
+    st.markdown(cards_html, unsafe_allow_html=True)
+
+
+# ─────────────────────────────────────────
+#  Coaching scorecard
+# ─────────────────────────────────────────
+st.markdown('<div class="section-title">Scorecard de coaching · Venta consultiva</div>', unsafe_allow_html=True)
+
+if connected.empty:
+    st.info("Sin llamadas para evaluar en este periodo.")
+else:
+    rows_html = ""
+    pairs = sorted(
+        zip(connected.to_dict("records"), cat_results, score_results),
+        key=lambda x: x[2]["score"], reverse=True,
+    )
+    for c, cat, s in pairs:
+        ts = c["timestamp"]
+        date_str = ts.tz_convert("America/Santiago").strftime("%d-%b") if hasattr(ts, "tz_convert") else "—"
+        title = (c.get("title") or "").replace("Llamada con ", "") or "Sin título"
+        dur = fmt_duration(c.get("duration_min", 0))
+        s_cls = score_class(s["score"])
+        bar_pct = int(s["score"] * 10)
+        rows_html += f"""
+          <tr>
+            <td>{date_str}</td>
+            <td>{title}</td>
+            <td><span class="tag {cat['tag']}">{cat['label'].split(' /')[0]}</span></td>
+            <td>{dur}</td>
+            <td>
+              <div class="score-bar {s_cls}">
+                <div class="bar"><i style="width:{bar_pct}%"></i></div>
+                <span class="num">{s['score']}</span>
+              </div>
+            </td>
+            <td>{s['focus']}</td>
+          </tr>
+        """
+    table_html = f"""
+      <div class="card">
+        <div style="font-size:15px;font-weight:600;margin-bottom:4px;">Evaluación llamada por llamada</div>
+        <div style="font-size:12px;color:var(--text-dim);margin-bottom:14px;">
+          Escala 1–10 sobre {len(connected)} conexiones efectivas. Heurística por duración + categoría detectada.
+        </div>
+        <table class="scorecard-table">
+          <thead>
+            <tr><th>Fecha</th><th>Cliente</th><th>Tipo</th><th>Duración</th><th>Score</th><th>Foco de mejora</th></tr>
+          </thead>
+          <tbody>{rows_html}</tbody>
+        </table>
+      </div>
+    """
+    st.markdown(table_html, unsafe_allow_html=True)
+
+
+# ─────────────────────────────────────────
+#  Insights & alertas
+# ─────────────────────────────────────────
+st.markdown('<div class="section-title">Insights y alertas</div>', unsafe_allow_html=True)
+
+insights = []
+
+# 1. Top win
+if score_results:
+    best_idx = max(range(len(score_results)), key=lambda i: score_results[i]["score"])
+    best_call = connected.iloc[best_idx]
+    if score_results[best_idx]["score"] >= 8:
+        insights.append(("win",
+            f"🏆 <strong>Mejor llamada del periodo:</strong> "
+            f"{best_call['title'].replace('Llamada con ', '')} "
+            f"({score_results[best_idx]['score']}/10). Categoría: {cat_results[best_idx]['label']}."))
+
+# 2. Email-dependence
+discovery_count = sum(1 for c in cat_results if c["key"] == "discovery")
+if discovery_count >= 2 and len(connected) > 0:
+    pct = discovery_count / len(connected) * 100
+    if pct >= 30:
+        insights.append(("warn",
+            f"⚠️ <strong>Email-dependence:</strong> {discovery_count} de {len(connected)} conversaciones "
+            f"({pct:.0f}%) terminaron derivando a correo. Aplicar SPIN antes de aceptar 'mándame info'."))
+
+# 3. Repetidos sin respuesta
+no_answer = df[df["disposition"] == "Sin respuesta"]
+if len(no_answer) >= 3:
+    by_title = no_answer["title"].value_counts()
+    repeats = by_title[by_title >= 3]
+    if not repeats.empty:
+        names = ", ".join(repeats.index[:3].tolist())
+        insights.append(("warn",
+            f"⚠️ <strong>Marcado repetitivo sin respuesta:</strong> {names}. "
+            f"Variar canal: voz → WhatsApp → email personalizado → reintento en otro horario."))
+
+# 4. Failed/Sin disposición
+failed = df[df["disposition"] == "Sin disposición"]
+if len(failed) >= 4:
+    insights.append(("warn",
+        f"🔧 <strong>Alerta técnica:</strong> {len(failed)} llamadas sin disposición/failed en el periodo. "
+        f"Revisar problemas de marcado o integración SIP con TI."))
+
+# 5. Tasa de conexión
+if conn_rate >= 35:
+    insights.append(("win",
+        f"📈 <strong>Excelente tasa de conexión:</strong> {conn_rate:.1f}% (benchmark 25-30%)."))
+elif conn_rate < 20 and len(outbound) >= 5:
+    insights.append(("warn",
+        f"📉 <strong>Tasa de conexión baja:</strong> {conn_rate:.1f}%. "
+        f"Revisar horarios, calidad de listas o canal preferido del prospecto."))
+
+# 6. Empresas asignadas
+if total_companies == 0 and total_contacts > 0:
+    insights.append(("",
+        f"📋 <strong>Asignación de empresas:</strong> {total_contacts} contactos asignados pero 0 empresas. "
+        f"Verificar workflow de propiedad para sincronizar contacto → empresa."))
+
+if not insights:
+    st.caption("Sin alertas relevantes para este periodo.")
+else:
+    for kind, html in insights:
+        cls = f"insight {kind}".strip()
+        st.markdown(f'<div class="{cls}">{html}</div>', unsafe_allow_html=True)
+
+
+# ─────────────────────────────────────────
+#  Detail tabs
+# ─────────────────────────────────────────
+st.markdown('<div class="section-title">Detalle</div>', unsafe_allow_html=True)
+tab1, tab2, tab3 = st.tabs([
     f"📞 Llamadas ({total_calls})",
     f"📝 Conectadas con notas ({len(connected)})",
-    f"👥 Contactos & Empresas",
+    "👥 Contactos & Empresas",
 ])
 
-with tab_calls:
-    show = df_calls[[
-        "timestamp", "title", "disposition", "direction",
-        "duration_min", "status",
-    ]].copy()
+with tab1:
+    show = df[["timestamp", "title", "disposition", "direction", "duration_min", "status"]].copy()
     show["timestamp"] = show["timestamp"].dt.tz_convert("America/Santiago").dt.strftime("%Y-%m-%d %H:%M")
     show["duration_min"] = show["duration_min"].round(1)
     show.columns = ["Fecha/Hora", "Título", "Disposición", "Dirección", "Duración (min)", "Status"]
     st.dataframe(show, use_container_width=True, hide_index=True, height=400)
 
-with tab_summaries:
+with tab2:
     if connected.empty:
         st.info("Sin llamadas conectadas en este periodo.")
     else:
         for _, c in connected.iterrows():
-            with st.expander(f"📞 {c['title']} · {c['timestamp'].strftime('%d %b %Y %H:%M')} · {int(c['duration_min'])} min"):
+            with st.expander(
+                f"📞 {c['title']} · "
+                f"{c['timestamp'].tz_convert('America/Santiago').strftime('%d %b %Y %H:%M')} · "
+                f"{int(c['duration_min'])} min"
+            ):
                 if c["summary"]:
                     st.markdown("**Resumen IA**")
                     st.markdown(c["summary"], unsafe_allow_html=True)
@@ -325,31 +696,30 @@ with tab_summaries:
                 if not c["summary"] and not c["body"]:
                     st.caption("Sin resumen ni notas registradas.")
 
-with tab_contacts:
+with tab3:
     cc1, cc2 = st.columns(2)
     with cc1:
         st.markdown(f"**Contactos creados en el periodo:** {len(contacts)}")
         if contacts:
-            df_contacts = pd.DataFrame(contacts)
-            keep = [c for c in ["firstname", "lastname", "email", "lifecyclestage", "createdate"] if c in df_contacts.columns]
-            st.dataframe(df_contacts[keep], use_container_width=True, hide_index=True, height=320)
+            df_c = pd.DataFrame(contacts)
+            keep = [k for k in ["firstname", "lastname", "email", "lifecyclestage", "createdate"] if k in df_c.columns]
+            st.dataframe(df_c[keep], use_container_width=True, hide_index=True, height=320)
         else:
             st.caption("Sin contactos en el rango.")
     with cc2:
         st.markdown(f"**Empresas creadas en el periodo:** {len(companies)}")
         if companies:
-            df_comp = pd.DataFrame(companies)
-            keep = [c for c in ["name", "domain", "createdate"] if c in df_comp.columns]
-            st.dataframe(df_comp[keep], use_container_width=True, hide_index=True, height=320)
+            df_co = pd.DataFrame(companies)
+            keep = [k for k in ["name", "domain", "createdate"] if k in df_co.columns]
+            st.dataframe(df_co[keep], use_container_width=True, hide_index=True, height=320)
         else:
             st.caption("Sin empresas asignadas en el rango.")
 
 
-# ─────────────────────────────────────────
-#  Footer
-# ─────────────────────────────────────────
+# Footer
 st.divider()
 st.caption(
-    f"🔐 Datos en vivo desde HubSpot · weCAD4you · Portal 6257770 · "
-    f"Caché 15 min · Filtra automáticamente llamadas 2FA."
+    "🔐 Datos en vivo desde HubSpot · weCAD4you · Portal 6257770 · "
+    "Caché 15 min · Filtra automáticamente llamadas 2FA · "
+    "Categorías y scorecard generados por heurística sobre transcripciones."
 )
