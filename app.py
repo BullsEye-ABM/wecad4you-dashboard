@@ -521,7 +521,8 @@ else:
         bucket["calls"].append(title or "Sin título")
 
     # Render in the same order as CATEGORY_DEFS
-    cards_html = '<div class="cat-grid">'
+    # Build HTML on single lines to avoid markdown interpreting indented lines as code blocks
+    parts = ['<div class="cat-grid">']
     for key, label, badge, tag, _ in CATEGORY_DEFS:
         bucket = cat_buckets.get(key)
         if not bucket:
@@ -529,16 +530,16 @@ else:
         examples = " · ".join(bucket["calls"][:3])
         if len(bucket["calls"]) > 3:
             examples += f" · +{len(bucket['calls']) - 3}"
-        cards_html += f"""
-          <div class="cat-card">
-            <span class="cat-badge {badge}">{label.split(' /')[0].upper()}</span>
-            <div class="cat-name">{label}</div>
-            <div class="cat-num">{len(bucket['calls'])}</div>
-            <div class="cat-ex">{examples}</div>
-          </div>
-        """
-    cards_html += "</div>"
-    st.markdown(cards_html, unsafe_allow_html=True)
+        parts.append(
+            f'<div class="cat-card">'
+            f'<span class="cat-badge {badge}">{label.split(" /")[0].upper()}</span>'
+            f'<div class="cat-name">{label}</div>'
+            f'<div class="cat-num">{len(bucket["calls"])}</div>'
+            f'<div class="cat-ex">{examples}</div>'
+            f'</div>'
+        )
+    parts.append("</div>")
+    st.markdown("".join(parts), unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────
@@ -549,7 +550,8 @@ st.markdown('<div class="section-title">Scorecard de coaching · Venta consultiv
 if connected.empty:
     st.info("Sin llamadas para evaluar en este periodo.")
 else:
-    rows_html = ""
+    # Build HTML on single lines (avoid markdown code-block interpretation)
+    rows_parts = []
     pairs = sorted(
         zip(connected.to_dict("records"), cat_results, score_results),
         key=lambda x: x[2]["score"], reverse=True,
@@ -561,35 +563,26 @@ else:
         dur = fmt_duration(c.get("duration_min", 0))
         s_cls = score_class(s["score"])
         bar_pct = int(s["score"] * 10)
-        rows_html += f"""
-          <tr>
-            <td>{date_str}</td>
-            <td>{title}</td>
-            <td><span class="tag {cat['tag']}">{cat['label'].split(' /')[0]}</span></td>
-            <td>{dur}</td>
-            <td>
-              <div class="score-bar {s_cls}">
-                <div class="bar"><i style="width:{bar_pct}%"></i></div>
-                <span class="num">{s['score']}</span>
-              </div>
-            </td>
-            <td>{s['focus']}</td>
-          </tr>
-        """
-    table_html = f"""
-      <div class="card">
-        <div style="font-size:15px;font-weight:600;margin-bottom:4px;">Evaluación llamada por llamada</div>
-        <div style="font-size:12px;color:var(--text-dim);margin-bottom:14px;">
-          Escala 1–10 sobre {len(connected)} conexiones efectivas. Heurística por duración + categoría detectada.
-        </div>
-        <table class="scorecard-table">
-          <thead>
-            <tr><th>Fecha</th><th>Cliente</th><th>Tipo</th><th>Duración</th><th>Score</th><th>Foco de mejora</th></tr>
-          </thead>
-          <tbody>{rows_html}</tbody>
-        </table>
-      </div>
-    """
+        rows_parts.append(
+            f'<tr>'
+            f'<td>{date_str}</td>'
+            f'<td>{title}</td>'
+            f'<td><span class="tag {cat["tag"]}">{cat["label"].split(" /")[0]}</span></td>'
+            f'<td>{dur}</td>'
+            f'<td><div class="score-bar {s_cls}"><div class="bar"><i style="width:{bar_pct}%"></i></div><span class="num">{s["score"]}</span></div></td>'
+            f'<td>{s["focus"]}</td>'
+            f'</tr>'
+        )
+    table_html = (
+        '<div class="card">'
+        '<div style="font-size:15px;font-weight:600;margin-bottom:4px;">Evaluación llamada por llamada</div>'
+        f'<div style="font-size:12px;color:var(--text-dim);margin-bottom:14px;">Escala 1–10 sobre {len(connected)} conexiones efectivas. Heurística por duración + categoría detectada.</div>'
+        '<table class="scorecard-table">'
+        '<thead><tr><th>Fecha</th><th>Cliente</th><th>Tipo</th><th>Duración</th><th>Score</th><th>Foco de mejora</th></tr></thead>'
+        f'<tbody>{"".join(rows_parts)}</tbody>'
+        '</table>'
+        '</div>'
+    )
     st.markdown(table_html, unsafe_allow_html=True)
 
 
