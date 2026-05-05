@@ -263,30 +263,27 @@ section.main [data-baseweb="select"] > div {
 }
 [data-testid="stMain"] [data-baseweb="select"] svg,
 section.main [data-baseweb="select"] svg { fill: var(--text-dim) !important; }
-/* Aggressive popover/dropdown dark theme - covers Streamlit 1.57+ wrapper layers */
+/* Nuclear popover/dropdown dark theme - force ALL descendant layers */
 [data-baseweb="popover"],
-[data-baseweb="popover"] > div,
-[data-baseweb="popover"] > div > div,
+[data-baseweb="popover"] *,
 [data-baseweb="menu"],
-[data-baseweb="menu"] > div,
+[data-baseweb="menu"] *,
 [role="listbox"],
-ul[role="listbox"] {
-  background: var(--card) !important;
+[role="listbox"] * {
+  background-color: var(--card) !important;
+  color: var(--text) !important;
+  border-color: var(--border) !important;
+}
+[data-baseweb="popover"] {
   border: 1px solid var(--border) !important;
   border-radius: 8px !important;
-  box-shadow: 0 10px 30px rgba(0,0,0,.4) !important;
+  box-shadow: 0 10px 30px rgba(0,0,0,.5) !important;
 }
-[data-baseweb="popover"] li,
-[data-baseweb="popover"] [role="option"],
-[data-baseweb="menu"] li,
-[role="listbox"] li {
-  color: var(--text) !important;
-  background: transparent !important;
-}
-[data-baseweb="popover"] [role="option"]:hover,
+[data-baseweb="popover"] li:hover,
 [data-baseweb="menu"] li:hover,
+[role="option"]:hover,
 [role="option"][aria-selected="true"] {
-  background: rgba(108,140,255,.18) !important;
+  background-color: rgba(108,140,255,.20) !important;
   color: var(--text) !important;
 }
 
