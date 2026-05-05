@@ -4,8 +4,10 @@ Computes (start_date, end_date) for the 9 supported period options.
 All ranges are inclusive on both ends.
 """
 
+from __future__ import annotations
+
 from datetime import date, datetime, timedelta
-from typing import Tuple
+from typing import Optional, Tuple
 
 PERIOD_OPTIONS = [
     "Esta semana",
@@ -32,7 +34,7 @@ def _quarter_bounds(year: int, q_index: int) -> Tuple[date, date]:
     return start, end
 
 
-def get_period_dates(period: str, ref: date | None = None) -> Tuple[date, date]:
+def get_period_dates(period: str, ref: Optional[date] = None) -> Tuple[date, date]:
     """Return (start_date, end_date) inclusive."""
     today = ref or date.today()
 
