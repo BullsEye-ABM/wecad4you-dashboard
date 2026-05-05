@@ -263,18 +263,31 @@ section.main [data-baseweb="select"] > div {
 }
 [data-testid="stMain"] [data-baseweb="select"] svg,
 section.main [data-baseweb="select"] svg { fill: var(--text-dim) !important; }
-[data-baseweb="popover"] [role="listbox"] {
+/* Aggressive popover/dropdown dark theme - covers Streamlit 1.57+ wrapper layers */
+[data-baseweb="popover"],
+[data-baseweb="popover"] > div,
+[data-baseweb="popover"] > div > div,
+[data-baseweb="menu"],
+[data-baseweb="menu"] > div,
+[role="listbox"],
+ul[role="listbox"] {
   background: var(--card) !important;
   border: 1px solid var(--border) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 10px 30px rgba(0,0,0,.4) !important;
 }
-[data-baseweb="popover"] [role="listbox"] li,
-[data-baseweb="popover"] [role="option"] {
+[data-baseweb="popover"] li,
+[data-baseweb="popover"] [role="option"],
+[data-baseweb="menu"] li,
+[role="listbox"] li {
   color: var(--text) !important;
   background: transparent !important;
 }
 [data-baseweb="popover"] [role="option"]:hover,
-[data-baseweb="popover"] [aria-selected="true"] {
-  background: rgba(108,140,255,.15) !important;
+[data-baseweb="menu"] li:hover,
+[role="option"][aria-selected="true"] {
+  background: rgba(108,140,255,.18) !important;
+  color: var(--text) !important;
 }
 
 /* Audio player - dark via filter trick */
