@@ -252,6 +252,59 @@ hr { margin: 1.2rem 0; border-color: var(--border); }
   background: var(--accent); color: #0a0e22 !important;
   transform: scale(1.08); border-color: var(--accent);
 }
+
+/* Main area selectboxes (outside sidebar) - dark theme */
+[data-testid="stMain"] [data-baseweb="select"] > div,
+section.main [data-baseweb="select"] > div {
+  background: var(--card) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text) !important;
+  border-radius: 8px !important;
+}
+[data-testid="stMain"] [data-baseweb="select"] svg,
+section.main [data-baseweb="select"] svg { fill: var(--text-dim) !important; }
+[data-baseweb="popover"] [role="listbox"] {
+  background: var(--card) !important;
+  border: 1px solid var(--border) !important;
+}
+[data-baseweb="popover"] [role="listbox"] li,
+[data-baseweb="popover"] [role="option"] {
+  color: var(--text) !important;
+  background: transparent !important;
+}
+[data-baseweb="popover"] [role="option"]:hover,
+[data-baseweb="popover"] [aria-selected="true"] {
+  background: rgba(108,140,255,.15) !important;
+}
+
+/* Audio player - dark via filter trick */
+[data-testid="stAudio"] audio,
+audio {
+  width: 100% !important;
+  filter: invert(.88) hue-rotate(180deg) saturate(.7);
+  border-radius: 8px;
+}
+
+/* Expanders - dark theme */
+[data-testid="stExpander"] {
+  background: var(--card) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 10px !important;
+  margin-bottom: 6px;
+}
+[data-testid="stExpander"] summary,
+[data-testid="stExpander"] [data-testid="stExpanderToggleIcon"] {
+  color: var(--text) !important;
+}
+[data-testid="stExpander"] [data-testid="stMarkdownContainer"] {
+  color: var(--text-dim);
+}
+
+/* Player wrapper card */
+.player-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 14px; padding: 18px; margin-bottom: 12px;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -703,7 +756,6 @@ else:
     #  Inline audio player
     # ─────────────────────────────────────────
     st.markdown('<div class="section-title">🎧 Reproductor de grabaciones</div>', unsafe_allow_html=True)
-    st.caption("Selecciona una llamada conectada y reproducí su grabación + transcripción sin salir del dashboard.")
 
     player_options = []
     player_lookup = {}
@@ -717,36 +769,46 @@ else:
         player_lookup[opt] = c
 
     if player_options:
-        selected_call = st.selectbox(
-            "Llamada a reproducir",
-            player_options,
-            key="audio_player_select",
-            label_visibility="collapsed",
-        )
-        if selected_call:
-            call = player_lookup[selected_call]
-            call_id = call.get("id", "")
-            with st.spinner("Cargando grabación…"):
-                audio_data, info = fetch_recording_bytes(call_id)
+        with st.container():
+            st.markdown(
+                '<div class="player-card">'
+                '<div style="font-size:15px;font-weight:600;margin-bottom:4px;">Selecciona una llamada</div>'
+                '<div style="font-size:12px;color:var(--text-dim);margin-bottom:14px;">'
+                'Reproducí la grabación + transcripción sin salir del dashboard.'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+            selected_call = st.selectbox(
+                "Llamada a reproducir",
+                player_options,
+                key="audio_player_select",
+                label_visibility="collapsed",
+            )
+            if selected_call:
+                call = player_lookup[selected_call]
+                call_id = call.get("id", "")
+                with st.spinner("Cargando grabación…"):
+                    audio_data, info = fetch_recording_bytes(call_id)
 
-            if audio_data:
-                st.audio(audio_data, format=info if "audio" in info else "audio/mpeg")
-                col_a, col_b = st.columns([1, 1])
-                with col_a:
-                    if call.get("summary"):
-                        with st.expander("📝 Resumen IA"):
-                            st.markdown(call["summary"], unsafe_allow_html=True)
-                with col_b:
-                    if call.get("body"):
-                        with st.expander("✏️ Notas internas"):
-                            st.markdown(call["body"], unsafe_allow_html=True)
-            else:
-                st.warning(
-                    f"⚠️ No se pudo cargar el audio dentro del dashboard ({info}). "
-                    f"Puede ser que la grabación no esté disponible o que el token "
-                    f"no tenga el scope `crm.objects.calls.recording.read`. "
-                    f"Click 🎧 en la fila para abrirla en HubSpot."
-                )
+                if audio_data:
+                    st.audio(audio_data, format=info if "audio" in info else "audio/mpeg")
+                    col_a, col_b = st.columns([1, 1])
+                    with col_a:
+                        if call.get("summary"):
+                            with st.expander("📝 Resumen IA"):
+                                st.markdown(call["summary"], unsafe_allow_html=True)
+                    with col_b:
+                        if call.get("body"):
+                            with st.expander("✏️ Notas internas"):
+                                st.markdown(call["body"], unsafe_allow_html=True)
+                else:
+                    st.warning(
+                        f"⚠️ No se pudo cargar el audio dentro del dashboard ({info}). "
+                        f"Puede ser que la grabación no esté disponible o que el token "
+                        f"no tenga el scope `crm.objects.calls.recording.read`. "
+                        f"Click 🎧 en la fila para abrirla en HubSpot."
+                    )
+            st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────
