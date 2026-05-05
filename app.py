@@ -206,6 +206,19 @@ hr { margin: 1.2rem 0; border-color: var(--border); }
 .dt tr:last-child td { border-bottom: none; }
 .dt tr:hover td { background: rgba(255,255,255,.02); }
 .dt-wrap { max-height: 420px; overflow-y: auto; border-radius: 12px; }
+
+/* Listen button */
+.listen-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 32px; border-radius: 8px;
+  background: rgba(108,140,255,.12); color: var(--accent) !important;
+  text-decoration: none !important; transition: all .15s ease;
+  font-size: 14px; border: 1px solid rgba(108,140,255,.25);
+}
+.listen-btn:hover {
+  background: var(--accent); color: #0a0e22 !important;
+  transform: scale(1.08); border-color: var(--accent);
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -615,6 +628,7 @@ else:
         zip(connected.to_dict("records"), cat_results, score_results),
         key=lambda x: x[2]["score"], reverse=True,
     )
+    PORTAL_ID = "6257770"
     for c, cat, s in pairs:
         ts = c["timestamp"]
         date_str = ts.tz_convert("America/Santiago").strftime("%d-%b") if hasattr(ts, "tz_convert") else "—"
@@ -622,6 +636,13 @@ else:
         dur = fmt_duration(c.get("duration_min", 0))
         s_cls = score_class(s["score"])
         bar_pct = int(s["score"] * 10)
+        # Build audio button: opens HubSpot call review page (which has the player + transcript)
+        call_id = c.get("id", "")
+        audio_btn = (
+            f'<a href="https://app.hubspot.com/calls/{PORTAL_ID}/review/{call_id}" '
+            f'target="_blank" rel="noopener" class="listen-btn" '
+            f'title="Escuchar grabación en HubSpot">🎧</a>'
+        ) if call_id else ""
         rows_parts.append(
             f'<tr>'
             f'<td>{date_str}</td>'
@@ -630,14 +651,15 @@ else:
             f'<td>{dur}</td>'
             f'<td><div class="score-bar {s_cls}"><div class="bar"><i style="width:{bar_pct}%"></i></div><span class="num">{s["score"]}</span></div></td>'
             f'<td>{s["focus"]}</td>'
+            f'<td style="text-align:center">{audio_btn}</td>'
             f'</tr>'
         )
     table_html = (
         '<div class="card">'
         '<div style="font-size:15px;font-weight:600;margin-bottom:4px;">Evaluación llamada por llamada</div>'
-        f'<div style="font-size:12px;color:var(--text-dim);margin-bottom:14px;">Escala 1–10 sobre {len(connected)} conexiones efectivas. Heurística por duración + categoría detectada.</div>'
+        f'<div style="font-size:12px;color:var(--text-dim);margin-bottom:14px;">Escala 1–10 sobre {len(connected)} conexiones efectivas. Heurística por duración + categoría detectada. Click 🎧 para escuchar la grabación.</div>'
         '<table class="scorecard-table">'
-        '<thead><tr><th>Fecha</th><th>Cliente</th><th>Tipo</th><th>Duración</th><th>Score</th><th>Foco de mejora</th></tr></thead>'
+        '<thead><tr><th>Fecha</th><th>Cliente</th><th>Tipo</th><th>Duración</th><th>Score</th><th>Foco de mejora</th><th style="text-align:center">Audio</th></tr></thead>'
         f'<tbody>{"".join(rows_parts)}</tbody>'
         '</table>'
         '</div>'
