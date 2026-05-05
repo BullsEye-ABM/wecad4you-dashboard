@@ -7,6 +7,7 @@ Versión pro: incluye categorización automática y scorecard de coaching consul
 from __future__ import annotations
 
 import re
+import requests
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
@@ -17,6 +18,38 @@ from utils.hubspot import (
     list_owners, get_calls, get_contacts, get_companies, count_owned_total,
 )
 from utils.periods import PERIOD_OPTIONS, get_period_dates, to_ms, to_ms_end
+
+
+PORTAL_ID = "6257770"
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def fetch_recording_bytes(call_id: str):
+    """Download audio recording from HubSpot via authenticated proxy.
+    Returns (bytes, content_type) or (None, error_msg)."""
+    if not call_id:
+        return None, "Sin call_id"
+    try:
+        token = st.secrets["hubspot"]["private_app_token"]
+    except (KeyError, FileNotFoundError):
+        return None, "Token no configurado"
+    url = (
+        f"https://api-na1.hubspot.com/recording/auth/provider/hublets/v1/"
+        f"external-url-retriever/getAuthRecording/portal/{PORTAL_ID}/engagement/{call_id}"
+    )
+    try:
+        r = requests.get(
+            url,
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=45,
+            allow_redirects=True,
+        )
+        if r.status_code == 200 and r.content:
+            ct = r.headers.get("Content-Type", "audio/mpeg")
+            return r.content, ct
+        return None, f"HTTP {r.status_code}"
+    except Exception as e:
+        return None, str(e)[:120]
 
 
 # ─────────────────────────────────────────
@@ -657,14 +690,63 @@ else:
     table_html = (
         '<div class="card">'
         '<div style="font-size:15px;font-weight:600;margin-bottom:4px;">Evaluación llamada por llamada</div>'
-        f'<div style="font-size:12px;color:var(--text-dim);margin-bottom:14px;">Escala 1–10 sobre {len(connected)} conexiones efectivas. Heurística por duración + categoría detectada. Click 🎧 para escuchar la grabación.</div>'
+        f'<div style="font-size:12px;color:var(--text-dim);margin-bottom:14px;">Escala 1–10 sobre {len(connected)} conexiones efectivas. Heurística por duración + categoría detectada. Reproducí la grabación abajo o abrí en HubSpot con 🎧.</div>'
         '<table class="scorecard-table">'
-        '<thead><tr><th>Fecha</th><th>Cliente</th><th>Tipo</th><th>Duración</th><th>Score</th><th>Foco de mejora</th><th style="text-align:center">Audio</th></tr></thead>'
+        '<thead><tr><th>Fecha</th><th>Cliente</th><th>Tipo</th><th>Duración</th><th>Score</th><th>Foco de mejora</th><th style="text-align:center">HubSpot</th></tr></thead>'
         f'<tbody>{"".join(rows_parts)}</tbody>'
         '</table>'
         '</div>'
     )
     st.markdown(table_html, unsafe_allow_html=True)
+
+    # ─────────────────────────────────────────
+    #  Inline audio player
+    # ─────────────────────────────────────────
+    st.markdown('<div class="section-title">🎧 Reproductor de grabaciones</div>', unsafe_allow_html=True)
+    st.caption("Selecciona una llamada conectada y reproducí su grabación + transcripción sin salir del dashboard.")
+
+    player_options = []
+    player_lookup = {}
+    for c, cat, s in pairs:
+        title = (c.get("title") or "Sin título").replace("Llamada con ", "")
+        ts = c["timestamp"]
+        date_str = ts.tz_convert("America/Santiago").strftime("%d %b %H:%M") if hasattr(ts, "tz_convert") else "—"
+        dur_str = fmt_duration(c.get("duration_min", 0))
+        opt = f"{title} · {date_str} · {dur_str} · score {s['score']}/10"
+        player_options.append(opt)
+        player_lookup[opt] = c
+
+    if player_options:
+        selected_call = st.selectbox(
+            "Llamada a reproducir",
+            player_options,
+            key="audio_player_select",
+            label_visibility="collapsed",
+        )
+        if selected_call:
+            call = player_lookup[selected_call]
+            call_id = call.get("id", "")
+            with st.spinner("Cargando grabación…"):
+                audio_data, info = fetch_recording_bytes(call_id)
+
+            if audio_data:
+                st.audio(audio_data, format=info if "audio" in info else "audio/mpeg")
+                col_a, col_b = st.columns([1, 1])
+                with col_a:
+                    if call.get("summary"):
+                        with st.expander("📝 Resumen IA"):
+                            st.markdown(call["summary"], unsafe_allow_html=True)
+                with col_b:
+                    if call.get("body"):
+                        with st.expander("✏️ Notas internas"):
+                            st.markdown(call["body"], unsafe_allow_html=True)
+            else:
+                st.warning(
+                    f"⚠️ No se pudo cargar el audio dentro del dashboard ({info}). "
+                    f"Puede ser que la grabación no esté disponible o que el token "
+                    f"no tenga el scope `crm.objects.calls.recording.read`. "
+                    f"Click 🎧 en la fila para abrirla en HubSpot."
+                )
 
 
 # ─────────────────────────────────────────
