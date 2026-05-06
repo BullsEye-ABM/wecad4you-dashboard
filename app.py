@@ -15,7 +15,7 @@ import streamlit as st
 from datetime import datetime
 
 from utils.hubspot import (
-    list_owners, get_calls, get_contacts, get_companies, count_owned_total,
+    list_owners, get_calls, get_contacts, get_companies, count_owned_total, get_emails,
 )
 from utils.periods import PERIOD_OPTIONS, get_period_dates, to_ms, to_ms_end
 
@@ -108,9 +108,9 @@ html, body, [data-testid="stAppViewContainer"] {
 }
 
 /* KPI cards */
-.kpi-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 8px; }
-@media (max-width: 1100px) { .kpi-row { grid-template-columns: repeat(3, 1fr); } }
-@media (max-width: 600px)  { .kpi-row { grid-template-columns: repeat(2, 1fr); } }
+.kpi-row { display: grid; grid-template-columns: repeat(7, 1fr); gap: 12px; margin-bottom: 8px; }
+@media (max-width: 1200px) { .kpi-row { grid-template-columns: repeat(4, 1fr); } }
+@media (max-width: 800px)  { .kpi-row { grid-template-columns: repeat(2, 1fr); } }
 .kpi {
   background: var(--card); border: 1px solid var(--border);
   border-radius: 14px; padding: 16px;
@@ -123,6 +123,7 @@ html, body, [data-testid="stAppViewContainer"] {
 .kpi.amber  .kpi-value { color: var(--amber); }
 .kpi.red    .kpi-value { color: var(--red); }
 .kpi.purple .kpi-value { color: var(--purple); }
+.kpi.pink   .kpi-value { color: var(--pink); }
 
 /* Cards generic */
 .card {
@@ -473,6 +474,7 @@ end_ms = to_ms_end(end_date)
 calls = get_calls(owner["id"], start_ms, end_ms)
 contacts = get_contacts(owner["id"], start_ms, end_ms)
 companies = get_companies(owner["id"], start_ms, end_ms)
+emails_raw = get_emails(owner["id"], start_ms, end_ms)
 total_contacts = count_owned_total("contacts", owner["id"])
 total_companies = count_owned_total("companies", owner["id"])
 
@@ -506,6 +508,8 @@ total_connected = len(connected)
 conn_rate = (total_connected / len(outbound) * 100) if len(outbound) > 0 else 0
 avg_duration = connected["duration_min"].mean() if not connected.empty else 0
 inbound_count = len(df) - len(outbound) if not df.empty else 0
+emails_sent = [e for e in emails_raw if e.get("direction", "").upper() == "EMAIL"]
+total_emails_sent = len(emails_sent)
 
 def fmt_duration(mins: float) -> str:
     if not mins: return "–"
@@ -544,6 +548,11 @@ st.markdown(f"""
     <div class="kpi-label">Score promedio</div>
     <div class="kpi-value">{avg_score if avg_score else '–'}<span style="font-size:14px;color:var(--text-dim)">/10</span></div>
     <div class="kpi-sub">Coaching consultivo</div>
+  </div>
+  <div class="kpi pink">
+    <div class="kpi-label">Correos enviados</div>
+    <div class="kpi-value">{total_emails_sent}</div>
+    <div class="kpi-sub">Registrados en HubSpot</div>
   </div>
 </div>
 """, unsafe_allow_html=True)

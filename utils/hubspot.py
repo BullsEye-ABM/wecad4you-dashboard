@@ -181,6 +181,28 @@ def get_companies(owner_id: str, start_ms: int, end_ms: int) -> list[dict]:
     return [{"id": r["id"], **r.get("properties", {})} for r in raw]
 
 
+@st.cache_data(ttl=CACHE_TTL, show_spinner="Cargando correos…")
+def get_emails(owner_id: str, start_ms: int, end_ms: int) -> list[dict]:
+    """Return outbound email engagements sent to prospects."""
+    props = [
+        "hs_email_subject", "hs_email_status", "hs_email_direction",
+        "hs_timestamp", "hs_email_to_email",
+    ]
+    raw = _search("emails", props, owner_id, "hs_timestamp", start_ms, end_ms)
+    out = []
+    for r in raw:
+        p = r.get("properties", {})
+        out.append({
+            "id": r["id"],
+            "subject": p.get("hs_email_subject") or "",
+            "status": p.get("hs_email_status") or "",
+            "direction": p.get("hs_email_direction") or "",
+            "timestamp": p.get("hs_timestamp") or "",
+            "to_email": p.get("hs_email_to_email") or "",
+        })
+    return out
+
+
 @st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def count_owned_total(object_type: str, owner_id: str) -> int:
     """Total objects owned by user (no date filter)."""
